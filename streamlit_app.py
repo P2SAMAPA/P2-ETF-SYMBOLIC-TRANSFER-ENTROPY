@@ -33,7 +33,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<h1 style="text-align: center;">🔣 Symbolic Transfer Entropy with Macro State</h1>', unsafe_allow_html=True)
-st.markdown('<p style="text-align: center;">Conditional information flow: macro → ETF given macro level (low/medium/high)</p>', unsafe_allow_html=True)
+st.markdown('<p style="text-align: center;">Conditional information flow: macro → ETF given macro level (low/medium/high) | Averaged over all macro variables</p>', unsafe_allow_html=True)
 
 st.sidebar.markdown("## 🧮 Symbolic TE")
 if st.sidebar.button("🔄 Refresh Data", use_container_width=True, type="primary"):
@@ -42,9 +42,9 @@ if st.sidebar.button("🔄 Refresh Data", use_container_width=True, type="primar
 
 st.sidebar.markdown(f"**Run Date:** `{st.session_state.get('run_date', 'Not loaded')}`")
 st.sidebar.markdown(f"**Next Trading Day:** `{next_trading_day()}`")
-st.sidebar.markdown(f"**Primary macro:** {config.PRIMARY_MACRO} | **Macro bins:** {config.MACRO_BINS}")
-st.sidebar.markdown(f"**ETF bins:** {config.ETF_BINS} | **Lag:** {config.LAG}")
-st.sidebar.markdown(f"**Conditional on today:** {config.USE_CONDITIONAL_ON_TODAY}")
+st.sidebar.markdown(f"**Macro bins:** {config.MACRO_BINS} | **ETF bins:** {config.ETF_BINS}")
+st.sidebar.markdown(f"**Lag:** {config.LAG} | **Conditional on today:** {config.USE_CONDITIONAL_ON_TODAY}")
+st.sidebar.markdown(f"**Macros used:** {len(config.MACRO_VARS)} variables (VIX, DXY, yields, etc.)")
 
 OUTPUT_REPO = config.OUTPUT_REPO
 HF_TOKEN = config.HF_TOKEN
@@ -116,10 +116,10 @@ with tab1:
     with st.expander("📖 Interpretation", expanded=False):
         st.markdown("""
         - **Symbolic transfer entropy** extends standard TE by conditioning on the macro state itself.
-        - The macro variable (e.g., VIX) is discretised into symbols (low, medium, high).
+        - Macro variables (VIX, DXY, yields) are discretised into symbols (low, medium, high) via equal‑frequency bins.
         - For each macro symbol, we compute TE(macro → ETF) using only days when macro was in that state.
-        - The score is either the **average TE across symbols** or the **TE conditional on today's macro symbol**.
-        - High score → macro strongly predicts ETF **given the current macro regime**.
+        - The score for each ETF is the **average conditional TE across all macro variables**.
+        - High score → macro variables collectively predict ETF returns **given the current macro regime**.
         - Captures non‑linear, state‑dependent relationships that standard TE misses.
         """)
     for universe_name, uni_data in data["universes"].items():
