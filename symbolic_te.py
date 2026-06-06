@@ -93,6 +93,13 @@ def symbolic_te_score(returns, macro_df, use_conditional_on_today=True, macro_bi
             te = te_by_sym.get(today_sym, 0.0)
         else:
             te = avg_te
+        # Fallback to absolute correlation if TE is zero
+        if te == 0.0:
+            corr = np.abs(np.corrcoef(macro_series, rets)[0, 1])
+            if np.isfinite(corr):
+                te = corr
+            else:
+                te = 0.0
         te_values.append(te)
     if not te_values:
         return 0.0
