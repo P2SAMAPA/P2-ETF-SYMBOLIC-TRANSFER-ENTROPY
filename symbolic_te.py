@@ -1,4 +1,5 @@
 import numpy as np
+import config
 
 def discretise(series, n_bins):
     """Equal‑frequency discretisation."""
