@@ -1,5 +1,4 @@
 import numpy as np
-import config
 
 def discretise(series, n_bins):
     """Equal‑frequency discretisation."""
@@ -15,16 +14,14 @@ def transfer_entropy(source, target, lag=1, n_bins_source=None, n_bins_target=No
         n_bins_source = config.ETF_BINS
     if n_bins_target is None:
         n_bins_target = config.ETF_BINS
-    # Discretise
     src = discretise(source, n_bins_source)
     tgt = discretise(target, n_bins_target)
     if len(src) <= lag:
         return 0.0
-    # Align
     src_past = src[:-lag]
     tgt_past = tgt[:-lag]
     tgt_future = tgt[lag:]
-    # Compute joint counts for conditional entropy H(tgt_future | tgt_past)
+    # H(tgt_future | tgt_past)
     counts_yy = {}
     for yf, yp in zip(tgt_future, tgt_past):
         counts_yy[(yf, yp)] = counts_yy.get((yf, yp), 0) + 1
@@ -34,7 +31,7 @@ def transfer_entropy(source, target, lag=1, n_bins_source=None, n_bins_target=No
         pyf_yp = cnt / sum(1 for (_, yp_) in counts_yy if yp_ == yp)
         pyf_yp = max(pyf_yp, 1e-12)
         H_cond1 += (cnt / total) * (-np.log2(pyf_yp))
-    # Conditional entropy H(tgt_future | src_past, tgt_past)
+    # H(tgt_future | src_past, tgt_past)
     counts_xyy = {}
     for yf, xp, yp in zip(tgt_future, src_past, tgt_past):
         counts_xyy[(yf, xp, yp)] = counts_xyy.get((yf, xp, yp), 0) + 1
@@ -59,10 +56,8 @@ def conditional_transfer_entropy(source, target, macro_symbols, macro_bins=3, la
         macro_symbols = macro_symbols[:min_len]
     if len(source) < lag + 2:
         return 0.0, {}
-    # Discretise source and target
     src_disc = discretise(source, config.ETF_BINS)
     tgt_disc = discretise(target, config.ETF_BINS)
-    # Separate by macro symbol
     te_by_symbol = {}
     for sym in range(macro_bins):
         idx = (macro_symbols == sym)
@@ -73,37 +68,46 @@ def conditional_transfer_entropy(source, target, macro_symbols, macro_bins=3, la
             tgt_sub = tgt_disc[idx]
             te = transfer_entropy(src_sub, tgt_sub, lag=lag, n_bins_source=config.ETF_BINS, n_bins_target=config.ETF_BINS)
         te_by_symbol[sym] = te
-    # Average TE across symbols (weighted by frequency)
     weights = np.bincount(macro_symbols, minlength=macro_bins) / len(macro_symbols)
     avg_te = sum(te_by_symbol[sym] * weights[sym] for sym in range(macro_bins))
     return avg_te, te_by_symbol
 
-def symbolic_te_score(returns, macro_series, use_conditional_on_today=True, macro_bins=3, lag=1):
+def symbolic_te_score(returns, macro_df, use_conditional_on_today=True, macro_bins=3, lag=1):
     """
-    Compute score for one ETF:
-    - If use_conditional_on_today: return TE for the macro symbol corresponding to today's macro value.
-    - Else: return average TE across macro symbols.
+    Compute score for one ETF by averaging conditional transfer entropy over all macro variables.
     """
-    if len(returns) < lag + 5 or len(macro_series) < lag + 5:
+    if len(returns) < lag + 5 or macro_df is None or len(macro_df) < lag + 5:
         return 0.0
-    # Align lengths
-    min_len = min(len(returns), len(macro_series))
-    returns = returns[:min_len]
-    macro_series = macro_series[:min_len]
-    # Discretise macro into symbols
-    macro_symbols = discretise(macro_series, macro_bins)
-    # Compute conditional TE
-    avg_te, te_by_sym = conditional_transfer_entropy(macro_series, returns, macro_symbols, macro_bins, lag)
-    if use_conditional_on_today:
-        today_macro = macro_series[-1]
-        # Find which bin today's macro belongs to
-        # We need the same discretisation as used above; we recompute bins from the series
-        quantiles = np.linspace(0, 100, macro_bins+1)[1:-1]
-        bins = np.percentile(macro_series, quantiles)
-        today_sym = np.digitize(today_macro, bins)
-        # Ensure within 0..macro_bins-1
-        today_sym = min(max(today_sym, 0), macro_bins-1)
-        score = te_by_sym.get(today_sym, 0.0)
-    else:
-        score = avg_te
-    return float(score)
+    # Align returns and macro DataFrame to same index
+    common_idx = returns.index.intersection(macro_df.index) if hasattr(returns, 'index') else range(min(len(returns), len(macro_df)))
+    # For simplicity, we assume returns is a numpy array and macro_df is a DataFrame with same length.
+    # In train.py, we pass macro_window which is already aligned.
+    # We'll compute TE for each macro column and average.
+    te_values = []
+    for macro_col in macro_df.columns:
+        macro_series = macro_df[macro_col].values
+        if len(macro_series) != len(returns):
+            # Trim to common length
+            min_len = min(len(returns), len(macro_series))
+            macro_series = macro_series[:min_len]
+            rets = returns[:min_len]
+        else:
+            rets = returns
+        if len(rets) < lag + 5:
+            continue
+        # Discretise macro into symbols
+        macro_symbols = discretise(macro_series, macro_bins)
+        avg_te, te_by_sym = conditional_transfer_entropy(macro_series, rets, macro_symbols, macro_bins, lag)
+        if use_conditional_on_today:
+            today_macro = macro_series[-1]
+            quantiles = np.linspace(0, 100, macro_bins+1)[1:-1]
+            bins = np.percentile(macro_series, quantiles)
+            today_sym = np.digitize(today_macro, bins)
+            today_sym = min(max(today_sym, 0), macro_bins-1)
+            te = te_by_sym.get(today_sym, 0.0)
+        else:
+            te = avg_te
+        te_values.append(te)
+    if not te_values:
+        return 0.0
+    return float(np.mean(te_values))
