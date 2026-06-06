@@ -1,5 +1,5 @@
 import numpy as np
-import config   # <-- added import
+import config
 
 def discretise(series, n_bins):
     """Equal‑frequency discretisation."""
@@ -46,10 +46,7 @@ def transfer_entropy(source, target, lag=1, n_bins_source=None, n_bins_target=No
     return te
 
 def conditional_transfer_entropy(source, target, macro_symbols, macro_bins=3, lag=1):
-    """
-    Compute TE from source (macro) to target (ETF) conditioned on the macro symbol at time t.
-    Returns: average TE over macro symbols, and also TE for each symbol.
-    """
+    """Compute TE from source to target conditioned on macro symbol."""
     if len(source) != len(target):
         min_len = min(len(source), len(target))
         source = source[:min_len]
@@ -57,7 +54,7 @@ def conditional_transfer_entropy(source, target, macro_symbols, macro_bins=3, la
         macro_symbols = macro_symbols[:min_len]
     if len(source) < lag + 2:
         return 0.0, {}
-    src_disc = discretise(source, config.ETF_BINS)  # now config is imported
+    src_disc = discretise(source, config.ETF_BINS)
     tgt_disc = discretise(target, config.ETF_BINS)
     te_by_symbol = {}
     for sym in range(macro_bins):
@@ -74,20 +71,15 @@ def conditional_transfer_entropy(source, target, macro_symbols, macro_bins=3, la
     return avg_te, te_by_symbol
 
 def symbolic_te_score(returns, macro_df, use_conditional_on_today=True, macro_bins=3, lag=1):
-    """
-    Compute score for one ETF by averaging conditional transfer entropy over all macro variables.
-    """
+    """Average conditional transfer entropy across all macro variables."""
     if len(returns) < lag + 5 or macro_df is None or len(macro_df) < lag + 5:
         return 0.0
     te_values = []
     for macro_col in macro_df.columns:
         macro_series = macro_df[macro_col].values
-        if len(macro_series) != len(returns):
-            min_len = min(len(returns), len(macro_series))
-            macro_series = macro_series[:min_len]
-            rets = returns[:min_len]
-        else:
-            rets = returns
+        min_len = min(len(returns), len(macro_series))
+        rets = returns[:min_len]
+        macro_series = macro_series[:min_len]
         if len(rets) < lag + 5:
             continue
         macro_symbols = discretise(macro_series, macro_bins)
