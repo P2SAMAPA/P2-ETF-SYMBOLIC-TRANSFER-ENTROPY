@@ -24,17 +24,16 @@ def run_for_window(returns, macro_df, window_days):
     if len(returns) < window_days:
         return None
     ret_window = returns.iloc[-window_days:]
-    if macro_df is None or config.PRIMARY_MACRO not in macro_df.columns:
+    if macro_df is None or macro_df.empty:
         return None
     macro_window = macro_df.loc[ret_window.index]
-    macro_series = macro_window[config.PRIMARY_MACRO].values
-    if len(macro_series) < len(ret_window):
+    if len(macro_window) < len(ret_window):
         return None
     raw_scores = {}
     for ticker in ret_window.columns:
         s = symbolic_te_score(
             ret_window[ticker].values,
-            macro_series,
+            macro_window,
             use_conditional_on_today=config.USE_CONDITIONAL_ON_TODAY,
             macro_bins=config.MACRO_BINS,
             lag=config.LAG
@@ -62,7 +61,7 @@ def main():
     results = {
         "run_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "windows": config.WINDOWS,
-        "primary_macro": config.PRIMARY_MACRO,
+        "macro_vars": config.MACRO_VARS,
         "macro_bins": config.MACRO_BINS,
         "etf_bins": config.ETF_BINS,
         "lag": config.LAG,
