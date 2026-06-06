@@ -1,4 +1,5 @@
 import numpy as np
+import config   # <-- added import
 
 def discretise(series, n_bins):
     """Equal‑frequency discretisation."""
@@ -56,7 +57,7 @@ def conditional_transfer_entropy(source, target, macro_symbols, macro_bins=3, la
         macro_symbols = macro_symbols[:min_len]
     if len(source) < lag + 2:
         return 0.0, {}
-    src_disc = discretise(source, config.ETF_BINS)
+    src_disc = discretise(source, config.ETF_BINS)  # now config is imported
     tgt_disc = discretise(target, config.ETF_BINS)
     te_by_symbol = {}
     for sym in range(macro_bins):
@@ -78,16 +79,10 @@ def symbolic_te_score(returns, macro_df, use_conditional_on_today=True, macro_bi
     """
     if len(returns) < lag + 5 or macro_df is None or len(macro_df) < lag + 5:
         return 0.0
-    # Align returns and macro DataFrame to same index
-    common_idx = returns.index.intersection(macro_df.index) if hasattr(returns, 'index') else range(min(len(returns), len(macro_df)))
-    # For simplicity, we assume returns is a numpy array and macro_df is a DataFrame with same length.
-    # In train.py, we pass macro_window which is already aligned.
-    # We'll compute TE for each macro column and average.
     te_values = []
     for macro_col in macro_df.columns:
         macro_series = macro_df[macro_col].values
         if len(macro_series) != len(returns):
-            # Trim to common length
             min_len = min(len(returns), len(macro_series))
             macro_series = macro_series[:min_len]
             rets = returns[:min_len]
@@ -95,7 +90,6 @@ def symbolic_te_score(returns, macro_df, use_conditional_on_today=True, macro_bi
             rets = returns
         if len(rets) < lag + 5:
             continue
-        # Discretise macro into symbols
         macro_symbols = discretise(macro_series, macro_bins)
         avg_te, te_by_sym = conditional_transfer_entropy(macro_series, rets, macro_symbols, macro_bins, lag)
         if use_conditional_on_today:
